@@ -1,11 +1,3 @@
-// Add Stripe initialization
-let stripe;
-fetch('/stripe-key')
-    .then(response => response.json())
-    .then(data => {
-        stripe = Stripe(data.publishableKey);
-    });
-
 document.addEventListener('DOMContentLoaded', () => {
     const amountButtons = document.querySelectorAll('.amount-btn');
     const customAmountInput = document.querySelector('.custom-amount-input');
@@ -32,12 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Handle custom amount input
     const customAmount = document.getElementById('customAmount');
     customAmount.addEventListener('input', (e) => {
-        selectedAmount = parseInt(e.target.value) || 0;
+        selectedAmount = Number(e.target.value) || 0;
     });
 
     // Update donate button click handler
     donateButton.addEventListener('click', async () => {
-        if (selectedAmount <= 0) {
+        if (!Number.isFinite(selectedAmount) || selectedAmount < 0.5 || selectedAmount > 5000 || Math.round(selectedAmount * 100) !== selectedAmount * 100) {
             alert('Please select or enter a valid donation amount');
             return;
         }
@@ -50,20 +42,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    amount: selectedAmount * 100 // Convert to cents
+                    amount: Math.round(selectedAmount * 100) // Whole cents only
                 })
             });
 
             const session = await response.json();
-            
-            // Redirect to Stripe checkout
-            const result = await stripe.redirectToCheckout({
-                sessionId: session.id
-            });
-
-            if (result.error) {
-                throw new Error(result.error.message);
+            if (!response.ok || typeof session.url !== 'string') {
+                throw new Error('Checkout could not be started');
             }
+            const destination = new URL(session.url);
+            if (destination.protocol !== 'https:' || destination.hostname !== 'checkout.stripe.com') {
+                throw new Error('Unexpected checkout destination');
+            }
+            window.location.assign(destination.href);
         } catch (error) {
             console.error('Payment failed:', error);
             alert('Payment processing failed. Please try again.');
